@@ -1,0 +1,9 @@
+/bin/
+/.cache/
+/.gocache/
+/data/
+/results/raw/
+*.test
+*.out
+*.prof
+porcupine-*.html

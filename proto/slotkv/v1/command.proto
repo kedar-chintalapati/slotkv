@@ -1,0 +1,21 @@
+syntax = "proto3";
+
+package slotkv.v1;
+
+option go_package = "github.com/kedar-chintalapati/slotkv/gen/slotkv/v1;slotkvv1";
+
+import "slotkv/v1/kv.proto";
+
+// Command is the payload of a Raft log entry. It is internal to the server
+// and not part of the client API.
+message Command {
+  enum Op {
+    OP_UNSPECIFIED = 0;
+    OP_PUT = 1;
+    OP_DELETE = 2;
+  }
+  Op op = 1;
+  bytes key = 2;
+  bytes value = 3;
+  Session session = 4;
+}

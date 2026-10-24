@@ -1,0 +1,1 @@
+{"version":1,"operations":[{"client_id":0,"call":1,"return":2,"input":{"op":1,"key":"a2V5","value":"bmV3"},"output":{}},{"client_id":0,"call":3,"return":4,"input":{"op":0,"key":"a2V5"},"output":{"value":"b2xk","found":true}}]}

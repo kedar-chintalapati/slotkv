@@ -1,0 +1,34 @@
+# kvbench Job template. The double-underscore tokens (job name, image, and the
+# kvbench arguments as YAML list items) are filled by render in scripts/lib.sh.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kvbench-__NAME__
+  namespace: slotkv
+  labels:
+    app: kvbench
+spec:
+  backoffLimit: 0
+  template:
+    metadata:
+      labels:
+        app: kvbench
+    spec:
+      restartPolicy: Never
+      # Run on the control-plane node so pausing or draining a worker never
+      # takes the load generator down with it.
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""
+      tolerations:
+      - key: node-role.kubernetes.io/control-plane
+        operator: Exists
+        effect: NoSchedule
+      containers:
+      - name: kvbench
+        image: __IMAGE__
+        imagePullPolicy: IfNotPresent
+        command: ["/kvbench"]
+        args:
+__ARGS__
+        resources:
+          requests: {cpu: "2"}

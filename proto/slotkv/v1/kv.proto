@@ -1,0 +1,109 @@
+syntax = "proto3";
+
+package slotkv.v1;
+
+option go_package = "github.com/kedar-chintalapati/slotkv/gen/slotkv/v1;slotkvv1";
+
+// KVService is served by every node. A request for a key must reach the
+// leader of the key's Raft group; any other node answers FailedPrecondition
+// with a NotLeader error detail.
+service KVService {
+  rpc Get(GetRequest) returns (GetResponse);
+  rpc Put(PutRequest) returns (PutResponse);
+  rpc Delete(DeleteRequest) returns (DeleteResponse);
+  // Topology returns the slot map, groups, and nodes, plus the answering
+  // node's view of each group's leader.
+  rpc Topology(TopologyRequest) returns (TopologyResponse);
+  // Status reports the Raft state of every group hosted on the answering node.
+  rpc Status(StatusRequest) returns (StatusResponse);
+}
+
+// Session identifies a write for deduplication. A session has at most one
+// request outstanding; seq increases by one per request and is reused when
+// the request is retried.
+message Session {
+  string client_id = 1;
+  uint64 seq = 2;
+}
+
+message GetRequest {
+  bytes key = 1;
+}
+
+message GetResponse {
+  bytes value = 1;
+  bool found = 2;
+}
+
+message PutRequest {
+  Session session = 1;
+  bytes key = 2;
+  bytes value = 3;
+}
+
+message PutResponse {}
+
+message DeleteRequest {
+  Session session = 1;
+  bytes key = 2;
+}
+
+message DeleteResponse {
+  bool existed = 1;
+}
+
+message TopologyRequest {}
+
+message Node {
+  string id = 1;
+  string grpc_addr = 2;
+  string raft_addr = 3;
+}
+
+message Group {
+  uint32 id = 1;
+  // Node IDs of the replicas. replicas[0] is the preferred leader.
+  repeated string replicas = 2;
+  // Leader as seen by the answering node; empty if unknown.
+  string leader_id = 3;
+}
+
+message TopologyResponse {
+  uint32 num_slots = 1;
+  repeated Node nodes = 2;
+  repeated Group groups = 3;
+  // slot_to_group[slot] is the ID of the group that owns the slot.
+  repeated uint32 slot_to_group = 4;
+}
+
+message StatusRequest {}
+
+message GroupStatus {
+  uint32 group_id = 1;
+  // Leader, Follower, Candidate, or Shutdown.
+  string state = 2;
+  string leader_id = 3;
+  uint64 term = 4;
+  uint64 commit_index = 5;
+  uint64 applied_index = 6;
+  uint64 last_log_index = 7;
+  // True once this node, as leader, has applied a barrier in its current term
+  // and can serve linearizable reads.
+  bool read_ready = 8;
+}
+
+message StatusResponse {
+  string node_id = 1;
+  // True once the node has started shutting down.
+  bool draining = 2;
+  repeated GroupStatus groups = 3;
+}
+
+// NotLeader is attached as an error detail to FailedPrecondition errors.
+message NotLeader {
+  uint32 group_id = 1;
+  // Empty when the answering node does not know the leader.
+  string leader_id = 2;
+  // gRPC address of the leader; empty when unknown.
+  string leader_addr = 3;
+}

@@ -1,0 +1,116 @@
+# slotkv cluster template. The double-underscore tokens (image, groups, shutdown
+# mode, readiness mode, CPU limit) are filled by render in scripts/lib.sh.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: slotkv
+---
+# Headless: gives each pod a stable DNS name. Not-ready pods stay resolvable so
+# a restarting replica can catch up.
+apiVersion: v1
+kind: Service
+metadata:
+  name: kv
+  namespace: slotkv
+  labels:
+    app: kv
+spec:
+  clusterIP: None
+  publishNotReadyAddresses: true
+  selector:
+    app: kv
+  ports:
+  - {name: grpc, port: 7000}
+  - {name: raft, port: 7001}
+  - {name: http, port: 8080}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: kv
+  namespace: slotkv
+  labels:
+    app: kv
+spec:
+  replicas: 3
+  serviceName: kv
+  podManagementPolicy: Parallel
+  # Require five continuous ready seconds before this pod advances a rollout.
+  minReadySeconds: 5
+  updateStrategy:
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      app: kv
+  template:
+    metadata:
+      labels:
+        app: kv
+    spec:
+      terminationGracePeriodSeconds: 30
+      securityContext:
+        fsGroup: 65532
+      # One replica per zone.
+      topologySpreadConstraints:
+      - maxSkew: 1
+        topologyKey: topology.kubernetes.io/zone
+        whenUnsatisfiable: DoNotSchedule
+        labelSelector:
+          matchLabels:
+            app: kv
+      containers:
+      - name: kvnode
+        image: __IMAGE__
+        imagePullPolicy: IfNotPresent
+        command: ["/kvnode"]
+        args:
+        - --id=$(POD_NAME)
+        - --peers=kv-0=kv-0.kv.slotkv.svc.cluster.local:7000:7001,kv-1=kv-1.kv.slotkv.svc.cluster.local:7000:7001,kv-2=kv-2.kv.slotkv.svc.cluster.local:7000:7001
+        - --groups=__GROUPS__
+        - --shutdown=__SHUTDOWN__
+        - --readiness=__READINESS__
+        - --log-store=__LOG_STORE__
+        - --data-dir=/data
+        env:
+        - name: POD_NAME
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.name
+        ports:
+        - {name: grpc, containerPort: 7000}
+        - {name: raft, containerPort: 7001}
+        - {name: http, containerPort: 8080}
+        readinessProbe:
+          httpGet: {path: /readyz, port: 8080}
+          periodSeconds: 1
+          failureThreshold: 2
+        livenessProbe:
+          httpGet: {path: /healthz, port: 8080}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          failureThreshold: 6
+        resources:
+          requests: {cpu: 500m, memory: 256Mi}
+          limits: {cpu: "__CPU_LIMIT__", memory: 1Gi}
+        volumeMounts:
+        - {name: data, mountPath: /data}
+  volumeClaimTemplates:
+  - metadata:
+      name: data
+    spec:
+      accessModes: ["ReadWriteOnce"]
+      storageClassName: standard
+      resources:
+        requests:
+          storage: 1Gi
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: kv
+  namespace: slotkv
+spec:
+  maxUnavailable: 1
+  selector:
+    matchLabels:
+      app: kv

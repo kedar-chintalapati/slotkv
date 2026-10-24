@@ -1,0 +1,6 @@
+.git
+.cache/
+.gocache/
+bin/
+data/
+results/

@@ -1,0 +1,16 @@
+# One control plane plus three workers, one worker per zone. The workers are
+# named slotkv-worker, slotkv-worker2 and slotkv-worker3 (zone-a, zone-b, zone-c).
+kind: Cluster
+apiVersion: kind.x-k8s.io/v1alpha4
+name: slotkv
+nodes:
+- role: control-plane
+- role: worker
+  labels:
+    topology.kubernetes.io/zone: zone-a
+- role: worker
+  labels:
+    topology.kubernetes.io/zone: zone-b
+- role: worker
+  labels:
+    topology.kubernetes.io/zone: zone-c
